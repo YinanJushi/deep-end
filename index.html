@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deep End</title>
+<style>
+  :root {
+    --bg: #0b0d17; --panel: #151a2b; --line: #343c57; --ink: #dfe1e8; --dim: #9399ab;
+    --accent: #fbd15a; --good: #62ad48; --bad: #ee6b57; --water: #2a9bd1;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; overflow: hidden; }
+  #app { display: flex; height: 100%; }
+  #stage { position: relative; flex: 1; min-width: 0; }
+  canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
+  #hint { position: absolute; left: 12px; bottom: 10px; color: #fbf8efcc; text-shadow: 0 1px 0 #000a; font-size: 12px; pointer-events: none; }
+  #fatal { position: absolute; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; color: var(--bad); white-space: pre-wrap; }
+  aside { width: 340px; background: var(--panel); border-left: 2px solid var(--line); overflow-y: auto; padding: 14px 16px 24px; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: 0.18em; color: var(--accent); }
+  h1 + p { margin: 2px 0 14px; color: var(--dim); }
+  h2 { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin: 18px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  .board { background: #0b0d17; border: 1px solid var(--line); padding: 10px; }
+  #evTitle { color: var(--water); font-weight: bold; letter-spacing: 0.08em; }
+  #curDiver { font-size: 15px; margin-top: 4px; }
+  #curDive { color: var(--dim); min-height: 2.8em; }
+  #cards { display: flex; gap: 6px; margin: 8px 0; }
+  .card { flex: 1; height: 44px; display: grid; place-items: center; background: #1a2036; border: 1px solid var(--line); color: #4d566f; font-size: 18px; font-weight: bold; }
+  .card.up { background: #fbf8ef; color: #151a2b; border-color: #fff; }
+  .card.drop { background: #6d758c; color: #343c57; text-decoration: line-through; }
+  #total { font-size: 13px; min-height: 1.4em; color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  td, th { padding: 2px 4px; text-align: right; }
+  td:nth-child(2), th:nth-child(2) { text-align: left; }
+  th { color: var(--dim); font-weight: normal; font-size: 11px; border-bottom: 1px solid var(--line); }
+  tr.now td { color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+  .row > label { width: 62px; color: var(--dim); }
+  button { font: inherit; color: var(--ink); background: #232a42; border: 1px solid var(--line); padding: 4px 9px; cursor: pointer; }
+  button:hover { background: #343c57; }
+  button[aria-pressed="true"] { background: var(--water); color: #07131d; border-color: #84d0ee; }
+  input[type=range] { flex: 1; accent-color: var(--accent); min-width: 80px; }
+  .val { width: 34px; text-align: right; color: var(--dim); }
+  details { color: var(--dim); }
+  summary { cursor: pointer; color: var(--ink); }
+  details p { margin: 6px 0; }
+  kbd { background: #232a42; border: 1px solid var(--line); padding: 0 4px; }
+  @media (max-width: 780px) { #app { flex-direction: column; } aside { width: 100%; height: 45%; border-left: 0; border-top: 2px solid var(--line); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="hint">Click the water to splash · drag to pan · wheel to zoom · <kbd>Q</kbd>/<kbd>E</kbd> rotate</div>
+    <div id="fatal"></div>
+  </div>
+  <aside>
+    <h1>DEEP END</h1>
+    <p>An open-air lido on a floating island.</p>
+
+    <h2>Meet scoreboard</h2>
+    <div class="board">
+      <div id="evTitle">10 m platform</div>
+      <div id="curDiver">—</div>
+      <div id="curDive">Warming up…</div>
+      <div id="cards"><div class="card">–</div><div class="card">–</div><div class="card">–</div><div class="card">–</div><div class="card">–</div></div>
+      <div id="total">&nbsp;</div>
+      <table id="table"><thead><tr><th>#</th><th>Diver</th><th>Last</th><th>Total</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <h2>Controls</h2>
+    <div class="row"><label>Event</label>
+      <button data-event="10" aria-pressed="true">10 m</button><button data-event="3" aria-pressed="false">3 m</button><button data-event="free" aria-pressed="false">Free swim</button></div>
+    <div class="row"><label>Light</label>
+      <button data-tod="day" aria-pressed="true">Day</button><button data-tod="dusk" aria-pressed="false">Dusk</button><button data-tod="night" aria-pressed="false">Night</button></div>
+    <div class="row"><label>Weather</label>
+      <button data-weather="dry" aria-pressed="true">Dry</button><button data-weather="rain" aria-pressed="false">Rain</button></div>
+    <div class="row"><label>View</label>
+      <button id="rotL" title="Rotate left (Q)">↺ Turn</button><button id="rotR" title="Rotate right (E)">Turn ↻</button></div>
+    <div class="row"><label>Zoom</label><input id="zoom" type="range" min="6" max="90" step="0.5" value="14"><span class="val" id="zoomV"></span></div>
+    <div class="row"><label>Pixel size</label><input id="px" type="range" min="1" max="8" step="1" value="3"><span class="val" id="pxV"></span></div>
+    <div class="row"><label>Raw 3D</label><button id="raw" aria-pressed="false">Off</button></div>
+
+    <h2>How it's drawn</h2>
+    <details>
+      <summary>Pixels, palette, outlines</summary>
+      <p>The scene is a real three.js 3D world seen through an orthographic isometric camera. It is rendered into a tiny render target with no anti-aliasing, then scaled up with nearest-neighbour filtering.</p>
+      <p>A post pass reads the depth buffer: where a pixel is much farther than its neighbours it is darkened, giving the outlines. Every pixel is then snapped to the nearest of 64 fixed colours, measured in OKLab so “nearest” matches what the eye sees. Only the sky uses ordered dithering.</p>
+      <p>Water is a wave-equation height field in ~20 cm cells. Its normals shade the surface, a mirrored copy of the whole lido gives the reflection, and the same field bends the caustics on the tiled floor.</p>
+      <p>Dives are flown, not animated: take-off speed and angular momentum are solved so the somersaults land; tucking shrinks the moment of inertia, so the spin speeds up, and kicking out slows it to line up the entry.</p>
+    </details>
+  </aside>
+</div>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
